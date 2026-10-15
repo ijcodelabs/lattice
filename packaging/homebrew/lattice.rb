@@ -10,7 +10,7 @@ cask "lattice" do
   desc "Keyboard-first tiling window manager"
   homepage "https://github.com/ijcodelabs/lattice"
 
-  depends_on macos: ">= :sequoia"
+  depends_on macos: :sequoia
 
   app "Lattice.app"
   binary "#{appdir}/Lattice.app/Contents/MacOS/Lattice", target: "lattice"
