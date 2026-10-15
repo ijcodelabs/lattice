@@ -1,0 +1,3 @@
+#!/bin/bash
+# Block commits that would put private files or secrets into the public history.
+exec "$(git rev-parse --show-toplevel)/scripts/check-public.sh" --staged

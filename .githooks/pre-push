@@ -1,0 +1,13 @@
+#!/bin/bash
+# Never push the private history branch; leak-check everything else before it leaves.
+revs=()
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [[ "$local_sha" =~ ^0+$ ]] && continue          # branch deletion: nothing to scan
+  if [[ "$local_ref" == "refs/heads/master" ]]; then
+    echo "✗ refusing to push 'master' — it holds the private history (notes, memory). Push 'main'."
+    exit 1
+  fi
+  revs+=("$local_sha")
+done
+[[ ${#revs[@]} -eq 0 ]] && exit 0
+exec "$(git rev-parse --show-toplevel)/scripts/check-public.sh" "${revs[@]}"
