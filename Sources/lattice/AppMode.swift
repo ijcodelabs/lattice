@@ -151,6 +151,13 @@ final class AppMode: NSObject, NSApplicationDelegate {
         exit(0)
     }
 
+    /// Quit from outside (logout/shutdown, `brew upgrade`/`uninstall`, `osascript … to quit`): same as ▦ → Quit,
+    /// so windows of hidden workspaces are never left parked in the corner.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        quit()
+        return .terminateNow   // not reached: quit() exits
+    }
+
     // MARK: - Onboarding
 
     func showOnboarding() {

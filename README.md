@@ -10,6 +10,10 @@ working across macOS updates.
 
 > **Status:** early, but daily-driven by its author. Expect rough edges; issues and ideas welcome.
 
+```bash
+brew install --cask ijcodelabs/tap/lattice
+```
+
 ## What it does
 
 - **Layouts per workspace:** dwindle (spiral), tree (i3-style splits), master/stack, monocle —
@@ -32,22 +36,31 @@ macOS 15 or later. Building needs Xcode (Swift 6).
 
 ## Install
 
-**Homebrew:**
+### Homebrew (recommended)
 
 ```bash
 brew install --cask ijcodelabs/tap/lattice
+open -a Lattice
 ```
 
-**Or download** `Lattice-X.Y.Z.zip` from [Releases](https://github.com/ijcodelabs/lattice/releases),
+This installs `Lattice.app` into Applications and the `lattice` command into your PATH
+(`lattice version`, `lattice config check`, `lattice doctor`, …).
+
+```bash
+brew upgrade --cask lattice            # update (quits Lattice; start it again with `open -a Lattice`)
+brew uninstall --cask lattice          # remove the app
+brew uninstall --zap --cask lattice    # …and your config, saved layout and logs
+```
+
+Updates keep the Accessibility permission — every release is signed with the same Developer ID.
+
+### Download
+
+Or download `Lattice-X.Y.Z.zip` from [Releases](https://github.com/ijcodelabs/lattice/releases),
 unzip it and move `Lattice.app` to Applications. Releases are signed and notarised by Apple, so they
 open without warnings.
 
-On first launch Lattice asks for **Accessibility** permission (System Settings → Privacy & Security →
-Accessibility) and starts tiling as soon as it's granted. Its menu-bar icon (▦) has Open Config,
-Reload Config, Start at Login and Quit — quitting always brings every window back on screen.
-`lattice version` prints the installed version (Homebrew links the `lattice` command).
-
-**Build from source** (needs Xcode):
+### Build from source (needs Xcode)
 
 ```bash
 git clone https://github.com/ijcodelabs/lattice.git && cd lattice
@@ -62,6 +75,12 @@ free Apple ID gives you an "Apple Development" certificate (Xcode → Settings �
 Certificates). Set `LATTICE_SIGN_IDENTITY` (or put it in `scripts/signing.env`) to it —
 `security find-identity -v -p codesigning` lists yours.
 
+### First launch
+
+On first launch Lattice asks for **Accessibility** permission (System Settings → Privacy & Security →
+Accessibility) and starts tiling as soon as it's granted. Its menu-bar icon (▦) has Open Config,
+Reload Config, Start at Login and Quit — quitting always brings every window back on screen.
+
 Tip: turn off macOS's own window tiling (System Settings → Desktop & Dock → Windows, the three
 "tile" options) — it snaps dragged windows before Lattice can place them — and use one macOS Space
 per display; Lattice's workspaces replace them.
@@ -69,7 +88,7 @@ per display; Lattice's workspaces replace them.
 ## Configure
 
 `~/.config/lattice/config.yaml` — created from the documented defaults with
-`~/Applications/Lattice.app/Contents/MacOS/Lattice config init` (or ▦ → Open Config).
+`lattice config init` (or ▦ → Open Config; from a source build: `~/Applications/Lattice.app/Contents/MacOS/Lattice config init`).
 
 - [docs/config.md](docs/config.md) — keys, layouts, workspaces, displays, groups, hints, mouse, session, rules
 - [docs/themes.md](docs/themes.md) — colours, fonts, the focus border
