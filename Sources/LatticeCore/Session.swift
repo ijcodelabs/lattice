@@ -136,7 +136,7 @@ extension Workspace {
 }
 
 extension Workspace: Codable {
-    enum CodingKeys: String, CodingKey { case name, layout, ratio, order, tree, groups, floating, focused }
+    enum CodingKeys: String, CodingKey { case name, layout, ratio, order, tree, groups, floating, focused, previousLayout }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -147,6 +147,7 @@ extension Workspace: Codable {
         groups = try c.decode([WindowID: WindowGroup].self, forKey: .groups)
         floating = try c.decode([WindowID: Rect].self, forKey: .floating)
         focused = try c.decodeIfPresent(WindowID.self, forKey: .focused)
+        previousLayout = try c.decodeIfPresent(LayoutKind.self, forKey: .previousLayout)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -154,6 +155,7 @@ extension Workspace: Codable {
         try c.encode(name, forKey: .name); try c.encode(layout, forKey: .layout); try c.encode(ratio, forKey: .ratio)
         try c.encode(order, forKey: .order); try c.encode(tree, forKey: .tree); try c.encode(groups, forKey: .groups)
         try c.encode(floating, forKey: .floating); try c.encodeIfPresent(focused, forKey: .focused)
+        try c.encodeIfPresent(previousLayout, forKey: .previousLayout)
     }
 }
 

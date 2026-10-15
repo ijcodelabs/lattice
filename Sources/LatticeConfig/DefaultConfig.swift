@@ -125,7 +125,7 @@ public enum DefaultConfig {
           mod+t: layout tree
           mod+d: layout dwindle
           mod+m: layout master
-          mod+f: layout monocle
+          mod+f: layout monocle           # again: back to the previous layout
           mod+shift+space: toggle-floating
           mod+v: split vertical
           mod+b: split horizontal

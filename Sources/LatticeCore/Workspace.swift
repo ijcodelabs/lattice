@@ -37,6 +37,8 @@ public struct Workspace: Hashable, Sendable {
     /// One-shot (i3-style): after `split` on a grouped window, the next new window opens as its own tile
     /// next to the group (this way) instead of joining it. Cleared by that window or a focus change.
     public var nextOutsideGroup: Orientation?
+    /// The layout before the last switch — `layout monocle` pressed again returns to it (mod+f toggles).
+    public var previousLayout: LayoutKind?
 
     public init(name: String, layout: LayoutKind, ratio: Double) {
         self.name = name; self.layout = layout; self.ratio = ratio

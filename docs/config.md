@@ -93,7 +93,7 @@ The default `ctrl+alt` is deliberate. On many keyboard layouts (Croatian, German
 | `dwindle` | Each new window takes half of the previous one, split along the longer side (spiral). |
 | `tree` | i3-style tree. `split vertical/horizontal` decides where the *next* window goes. Pressing `mod+v`/`mod+b` on a dwindle or master workspace switches it to tree **without moving anything**, so you can keep arranging by hand; `mod+d` goes back to dwindle. |
 | `master` | One master window on the left (`ratio` wide); the rest stacked on the right. |
-| `monocle` | Every window fills the screen; focus left/right cycles through them. |
+| `monocle` | Every window fills the screen; focus left/right cycles through them. Choosing monocle again (`mod+f`) goes back to the previous layout, arrangement intact — like i3's fullscreen toggle. |
 
 Each workspace remembers its own layout. Switching layouts never loses your arrangement, because the tree and the window order are kept in sync.
 
@@ -267,7 +267,7 @@ bindings:
 | `workspace back-and-forth` | Switch to the previous workspace. |
 | `workspace next\|prev` | Cycle through workspaces. |
 | `move-to-workspace NAME [follow]` | Send the focused window there; with `follow`, go along. |
-| `layout tree\|dwindle\|master\|monocle\|next` | Set or cycle this workspace's layout. |
+| `layout tree\|dwindle\|master\|monocle\|next` | Set or cycle this workspace's layout. `layout monocle` on a monocle workspace returns to the layout before it. |
 | `split horizontal\|vertical` (`h`/`v`) | Put the next window beside/below the focused one (or group). On a dwindle/master workspace this first turns it into a tree with the same arrangement. |
 | `toggle-floating` | Float or re-tile the focused window. |
 | `resize grow\|shrink [width\|height] [amount]` | Change the focused window's share (`amount` 0–1, default 0.05). |

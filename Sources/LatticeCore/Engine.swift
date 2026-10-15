@@ -546,8 +546,12 @@ public struct Engine: Sendable {
     }
 
     mutating func setLayout(_ kind: LayoutKind) {
+        let fallback: LayoutKind = settings.defaultLayout == .monocle ? .dwindle : settings.defaultLayout
         update(active) { ws in
-            ws.layout = kind
+            var kind = kind
+            // Monocle is "zoom": asking for it again goes back (i3's fullscreen toggle on mod+f).
+            if kind == .monocle, ws.layout == .monocle { kind = ws.previousLayout ?? fallback }
+            if kind != ws.layout { ws.previousLayout = ws.layout; ws.layout = kind }
             if kind == .tree, Set(ws.tree.leaves) != Set(ws.order) { ws.tree = LayoutTree(windows: ws.order) }
         }
     }
