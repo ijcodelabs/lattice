@@ -107,3 +107,10 @@ extension Display {
         displays.sorted { ($0.frame.minX, $0.frame.minY, $0.id) < ($1.frame.minX, $1.frame.minY, $1.id) }
     }
 }
+
+/// Which workspace each display showed and where each workspace lived, by display *name* (ids can change).
+struct DisplayArrangement: Hashable, Sendable {
+    var visible: [String: String]
+    var assigned: [String: String]
+    var active: String
+}

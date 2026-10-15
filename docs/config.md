@@ -223,6 +223,8 @@ Each display shows **one workspace at a time**, like i3 and sway. The workspace 
 - **`focus` and `move` cross displays.** `focus right` from the rightmost window jumps to the display beyond the right edge, and `move right` carries the window over to it, even when that display's workspace is empty.
 - **Directions follow the real arrangement** (System Settings → Displays): a laptop placed *below* a monitor is reached with `down`, never with left/right. With no display that way, focus wraps around the workspace instead.
 - **Plugging in** a display shows the next free workspace on it. **Unplugging** one moves its workspaces to the main display; nothing is lost, and the hidden ones are parked there.
+- **Plugging the same displays back in** (or waking from sleep, when macOS briefly drops the external monitor) restores the arrangement you had with them: each display shows the workspace it showed before.
+- **Sleep and screen lock:** while the Mac sleeps or is locked, macOS reports windows unreliably, so Lattice stops checking for closed windows. After you unlock, it puts the layout back as it was before sleep (like [session restore](#session-your-layout-survives-restarts)).
 - Every display gets **its own bar**, listing that display's workspaces. The focused workspace is filled in; one that's showing but not focused is outlined.
 
 Pin workspaces to displays:

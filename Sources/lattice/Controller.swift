@@ -46,6 +46,13 @@ final class Controller {
     /// Inside Lattice.app: the app delegate owns NSApp (menu-bar extra); don't change its activation policy.
     private let appMode: Bool
     private var lastSaved: Data?
+    /// Sleep, display sleep, screen lock, another user's session: macOS stops reporting windows reliably then
+    /// (AX calls them gone, displays flap). While any reason is set, reconcile forgets nothing; afterwards the
+    /// layout is rebuilt from the snapshot taken when the pause began (memory/gotchas.md #38).
+    private var pausedFor: Set<String> = []
+    private var pauseSnapshot: SessionSnapshot?
+    private var resumeWork: DispatchWorkItem?
+    private var paused: Bool { !pausedFor.isEmpty || resumeWork != nil }
 
     init(settings: Settings, configURL: URL, verbose: Bool, onlyApps: [String]? = nil, restoreOnExit: Bool = false,
          sessionURL: URL = LatticePaths.session, restoreSession: Bool = true, appMode: Bool = false) {
@@ -273,6 +280,11 @@ final class Controller {
     func allBindings(_ s: Settings) -> [Binding] { s.bindings + s.modes.values.flatMap(\.bindings) }
 
     func command(_ c: Command) {
+        if !pausedFor.isEmpty {   // a key reached us, so the user is back even if an "unlocked" notice was missed
+            log("input while paused — resuming")
+            pausedFor.removeAll()
+            scheduleResume(after: 0)
+        }
         log("⌨︎ \(c)")
         dispatch([.command(c)])
     }
@@ -411,6 +423,7 @@ final class Controller {
 
     /// AX notifications are hints (docs/idea.md §3): periodically re-read every app's windows and fix drift.
     func reconcile() {
+        guard !paused else { return }
         for (pid, handle) in apps {
             handle.worker.async {
                 let found = handle.element.windows.compactMap { w in handle.managedSnapshot(w).map { ($0, w) } }
@@ -446,6 +459,7 @@ final class Controller {
             let gone = checks.filter { $0.1.map { !$0.exists } ?? true }.map(\.0)
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
+                    guard !self.paused else { return }   // the check raced a sleep/lock: decide afterwards
                     let stillKnown = gone.filter { self.engine.windows[$0] != nil }
                     for id in stillKnown { self.log("− \(self.engine.windows[id]?.app ?? "?") (reconcile)") }
                     self.dispatch(stillKnown.map(Event.windowRemoved))
@@ -496,6 +510,53 @@ final class Controller {
             log("displays changed")
             dispatch([.displaysChanged(Displays.current())])
         }
+        let pauses: [(String, Notification.Name, Notification.Name, NotificationCenter)] = [
+            ("sleep", NSWorkspace.willSleepNotification, NSWorkspace.didWakeNotification, ws),
+            ("display sleep", NSWorkspace.screensDidSleepNotification, NSWorkspace.screensDidWakeNotification, ws),
+            ("locked", Notification.Name("com.apple.screenIsLocked"), Notification.Name("com.apple.screenIsUnlocked"),
+             DistributedNotificationCenter.default()),
+            ("user switched", NSWorkspace.sessionDidResignActiveNotification, NSWorkspace.sessionDidBecomeActiveNotification, ws),
+        ]
+        for (reason, start, end, center) in pauses {
+            on(start, center: center) { [weak self] _ in self?.pause(reason) }
+            on(end, center: center) { [weak self] _ in self?.unpause(reason) }
+        }
+    }
+
+    // MARK: - Sleep / lock
+
+    func pause(_ reason: String) {
+        resumeWork?.cancel()
+        resumeWork = nil
+        if pausedFor.isEmpty {
+            if pauseSnapshot == nil { pauseSnapshot = engine.snapshot(savedAt: Date().timeIntervalSince1970) }
+            log("⏸ \(reason) — window checks paused")
+        }
+        pausedFor.insert(reason)
+    }
+
+    func unpause(_ reason: String) {
+        guard pausedFor.remove(reason) != nil, pausedFor.isEmpty else { return }
+        scheduleResume(after: 2.5)   // let displays settle (they flap for a second or two after wake)
+    }
+
+    func scheduleResume(after delay: Double) {
+        resumeWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.pausedFor.isEmpty else { return }
+                self.resumeWork = nil
+                if let snap = self.pauseSnapshot {
+                    self.log("▶︎ resumed — putting the layout back as it was")
+                    self.dispatch([.displaysChanged(Displays.current()),
+                                   .restoreSession(snap, until: self.now + self.engine.settings.session.grace)])
+                }
+                self.pauseSnapshot = nil
+                self.reconcile()
+            }
+        }
+        resumeWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
 
     // MARK: - UI

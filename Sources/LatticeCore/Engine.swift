@@ -62,6 +62,10 @@ public struct Engine: Sendable {
     public private(set) var restoring: SessionSnapshot?
     private var restoreUntil: Double = 0
     private var restoreMatch: [WindowID: WindowID] = [:]
+    /// How workspaces were spread over each set of displays (key: sorted display names), recorded when that
+    /// set goes away. When the same set comes back (wake from sleep, monitor power-cycled, re-plugged), each
+    /// display gets back what it showed — not just the first free workspace.
+    private var arrangements: [String: DisplayArrangement] = [:]
     public static let switchEchoWindow = 0.4
 
     public init(settings: Settings, displays: [Display]) {
@@ -196,8 +200,10 @@ public struct Engine: Sendable {
         case let .windowFocused(id): return osFocused(id, now: now)
         case let .windowFrameObserved(id, r): observe(id, r); return []
         case let .displaysChanged(d):
+            rememberArrangement()
             displays = d
             syncDisplays()
+            restoreArrangement()
             return [.log("displays: \(Display.ordered(d).map { "\($0.name) → \(visible[$0.id] ?? "-")" }.joined(separator: ", "))")]
         case let .settingsChanged(s): return applySettings(s)
         case let .command(c):
@@ -972,6 +978,31 @@ public struct Engine: Sendable {
             assigned[pick] = d.id
         }
         for (d, name) in visible { assigned[name] = d }
+    }
+
+    static func arrangementKey(_ displays: [Display]) -> String { displays.map(\.name).sorted().joined(separator: "\u{1F}") }
+
+    mutating func rememberArrangement() {
+        guard !displays.isEmpty else { return }
+        let byID = Dictionary(displays.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
+        arrangements[Self.arrangementKey(displays)] = DisplayArrangement(
+            visible: Dictionary(visible.compactMap { d, ws in byID[d].map { ($0, ws) } }, uniquingKeysWith: { a, _ in a }),
+            assigned: assigned.compactMapValues { byID[$0] },
+            active: active)
+    }
+
+    /// Back to a display set seen before: restore what each display showed, then let syncDisplays fix the rest
+    /// (pins still win).
+    mutating func restoreArrangement() {
+        guard let a = arrangements[Self.arrangementKey(displays)] else { return }
+        let idByName = Dictionary(displays.map { ($0.name, $0.id) }, uniquingKeysWith: { a, _ in a })
+        for (ws, name) in a.assigned { if let id = idByName[name] { assigned[ws] = id } }
+        var restored: [UInt32: String] = [:]
+        for (name, ws) in a.visible { if let id = idByName[name], workspaces[ws] != nil { restored[id] = ws } }
+        guard !restored.isEmpty else { return }
+        visible = restored
+        if visible.values.contains(a.active) { active = a.active }
+        syncDisplays()
     }
 
     /// Keep a floating frame at the same relative spot when it changes display.
