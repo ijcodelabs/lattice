@@ -32,20 +32,35 @@ macOS 15 or later. Building needs Xcode (Swift 6).
 
 ## Install
 
+**Homebrew:**
+
+```bash
+brew install --cask ijcodelabs/tap/lattice
+```
+
+**Or download** `Lattice-X.Y.Z.zip` from [Releases](https://github.com/ijcodelabs/lattice/releases),
+unzip it and move `Lattice.app` to Applications. Releases are signed and notarised by Apple, so they
+open without warnings.
+
+On first launch Lattice asks for **Accessibility** permission (System Settings → Privacy & Security →
+Accessibility) and starts tiling as soon as it's granted. Its menu-bar icon (▦) has Open Config,
+Reload Config, Start at Login and Quit — quitting always brings every window back on screen.
+`lattice version` prints the installed version (Homebrew links the `lattice` command).
+
+**Build from source** (needs Xcode):
+
 ```bash
 git clone https://github.com/ijcodelabs/lattice.git && cd lattice
 scripts/build-app.sh --install        # build, sign and copy Lattice.app to ~/Applications
 open ~/Applications/Lattice.app
 ```
 
-On first launch Lattice asks for **Accessibility** permission (System Settings → Privacy & Security →
-Accessibility) and starts tiling as soon as it's granted. Its menu-bar icon (▦) has Open Config,
-Reload Config, Start at Login and Quit — quitting always brings every window back on screen.
-
-Signing: set `LATTICE_SIGN_IDENTITY` (or put it in `scripts/signing.env`) to a code-signing identity
-you own (`security find-identity -v -p codesigning`), so macOS keeps the Accessibility permission
-across rebuilds. Without one the app is signed ad-hoc and the permission must be granted again after
-every build.
+No Apple developer account is needed — without a signing identity the app is signed ad-hoc and runs
+fine, but macOS asks for the Accessibility permission again after every rebuild (remove Lattice from
+the list and add it back). To keep the permission across rebuilds, sign with a stable identity: any
+free Apple ID gives you an "Apple Development" certificate (Xcode → Settings → Accounts → Manage
+Certificates). Set `LATTICE_SIGN_IDENTITY` (or put it in `scripts/signing.env`) to it —
+`security find-identity -v -p codesigning` lists yours.
 
 Tip: turn off macOS's own window tiling (System Settings → Desktop & Dock → Windows, the three
 "tile" options) — it snaps dragged windows before Lattice can place them — and use one macOS Space
@@ -78,7 +93,8 @@ swift run lattice doctor              # permissions, displays, macOS tiling chec
 
 Bug reports, ideas and pull requests are welcome. Before pushing, enable the repo's hooks once —
 `git config core.hooksPath .githooks` — they run a secret/leak scan (`scripts/check-public.sh`,
-using [gitleaks](https://github.com/gitleaks/gitleaks)).
+using [gitleaks](https://github.com/gitleaks/gitleaks)). Maintainers: releases are described in
+[docs/releasing.md](docs/releasing.md).
 
 ## License
 

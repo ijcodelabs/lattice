@@ -9,6 +9,9 @@
 # (local, never committed). `security find-identity -v -p codesigning` lists yours. A stable identity
 # ("Developer ID Application: …" or "Apple Development: …") keeps macOS's Accessibility grant across
 # rebuilds; without one the app is signed ad-hoc ("-") and macOS asks for the grant again after every build.
+#
+# Version: CFBundleShortVersionString = the latest vX.Y.Z tag (or LATTICE_VERSION), CFBundleVersion = git describe.
+# LATTICE_TIMESTAMP=1 adds Apple's secure timestamp (required for notarisation; scripts/release.sh sets it).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -16,10 +19,14 @@ cd "$(dirname "$0")/.."
 IDENTITY="${LATTICE_SIGN_IDENTITY:--}"
 [[ "$IDENTITY" == "-" ]] && echo "⚠️  no LATTICE_SIGN_IDENTITY — signing ad-hoc (Accessibility must be re-granted after each build)"
 BUNDLE_ID="com.ijcodelabs.lattice"
-VERSION="$(git describe --tags --always 2>/dev/null || echo dev)"
-APP="build/Lattice.app"
+SHORT_VERSION="${LATTICE_VERSION:-$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || echo v0.0.0)}"
+SHORT_VERSION="${SHORT_VERSION#v}"
+VERSION="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"
+OUT="${LATTICE_OUT:-build}"          # output folder (e.g. a scratch dir while your daily Lattice runs from build/)
+APP="$OUT/Lattice.app"
 
-if pgrep -f "$PWD/$APP/Contents/MacOS/Lattice" >/dev/null; then
+mkdir -p "$OUT"
+if pgrep -f "$(cd "$OUT" && pwd -P)/Lattice.app/Contents/MacOS/Lattice" >/dev/null; then
   echo "Lattice is running from $APP — quit it from the menu bar (▦ → Quit) before rebuilding"; exit 1
 fi
 
@@ -43,7 +50,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleDisplayName</key><string>Lattice</string>
   <key>CFBundleExecutable</key><string>Lattice</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>0.4</string>
+  <key>CFBundleShortVersionString</key><string>$SHORT_VERSION</string>
   <key>CFBundleVersion</key><string>$VERSION</string>
   <key>LSMinimumSystemVersion</key><string>15.0</string>
   <key>LSUIElement</key><true/>
@@ -55,10 +62,11 @@ PLIST
 
 # Sign inside-out: helper first, then the app (hardened runtime; AX/event taps don't need entitlements).
 HARDEN=(--options runtime); [[ "$IDENTITY" == "-" ]] && HARDEN=()
-codesign --force "${HARDEN[@]}" --timestamp=none --sign "$IDENTITY" "$APP/Contents/MacOS/lattice-ui"
-codesign --force "${HARDEN[@]}" --timestamp=none --sign "$IDENTITY" --identifier "$BUNDLE_ID" "$APP"
+STAMP=(--timestamp=none); [[ "${LATTICE_TIMESTAMP:-}" == 1 ]] && STAMP=(--timestamp)
+codesign --force "${HARDEN[@]}" "${STAMP[@]}" --sign "$IDENTITY" "$APP/Contents/MacOS/lattice-ui"
+codesign --force "${HARDEN[@]}" "${STAMP[@]}" --sign "$IDENTITY" --identifier "$BUNDLE_ID" "$APP"
 codesign --verify --strict --verbose=1 "$APP"
-echo "built $APP ($VERSION) signed by: $IDENTITY"
+echo "built $APP $SHORT_VERSION ($VERSION) signed by: $IDENTITY"
 
 if [[ "${1:-}" == "--install" ]]; then
   mkdir -p "$HOME/Applications"

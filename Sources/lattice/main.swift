@@ -11,6 +11,7 @@ let usage = """
       lattice run [--config FILE] [--verbose] [--apps A,B] [--restore-on-exit]
                                                 start tiling; Ctrl-C or the `quit` binding brings parked windows back
                                                 (--apps: manage only these apps · --restore-on-exit: also undo tiling)
+      lattice version                           print the version
       lattice config check [FILE]               validate a config file (default ~/.config/lattice/config.yaml)
       lattice config init [--force]             write the documented default config
       lattice config path                       print the config file location
@@ -30,7 +31,8 @@ let usage = """
     """
 
 // Launched with no arguments from inside Lattice.app (Finder, login item) → the menu-bar app.
-if CommandLine.arguments.count == 1, Bundle.main.bundlePath.hasSuffix(".app") {
+// Not from a terminal: `lattice` (e.g. Homebrew's link to the bundle binary) with no args prints usage.
+if CommandLine.arguments.count == 1, Bundle.main.bundlePath.hasSuffix(".app"), isatty(STDIN_FILENO) == 0 {
     MainActor.assumeIsolated { AppMode.run() }
 }
 
@@ -217,6 +219,13 @@ case "drag":
         usleep(25_000)
     }
     post(.leftMouseUp, x2, y2); usleep(200_000)
+case "version", "--version", "-v":
+    // Set from the release tag by scripts/build-app.sh; a plain `swift build` has no bundle. Resolve the
+    // real executable first: through Homebrew's `lattice` symlink, Bundle.main doesn't see the .app.
+    let exe = (Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0])).resolvingSymlinksInPath()
+    let app = exe.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    let info = Bundle(url: app)?.infoDictionary
+    print("lattice \(info?["CFBundleShortVersionString"] as? String ?? "dev") (\(info?["CFBundleVersion"] as? String ?? "source build"))")
 case "help", "-h", "--help": print(usage)
 default: print(usage); exit(2)
 }

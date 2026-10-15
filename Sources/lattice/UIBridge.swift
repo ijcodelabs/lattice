@@ -22,7 +22,8 @@ final class UIBridge {
 
     /// `lattice-ui` lives next to the `lattice` binary.
     static var helperURL: URL {
-        let me = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
+        // The real executable, not argv[0] (just "lattice" when found via PATH, e.g. Homebrew's symlink).
+        let me = (Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0])).resolvingSymlinksInPath()
         return me.deletingLastPathComponent().appendingPathComponent("lattice-ui")
     }
 

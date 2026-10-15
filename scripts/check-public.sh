@@ -23,7 +23,7 @@ else
 fi
 
 # 1. Paths that must never be tracked.
-FORBIDDEN='^(memory/|CLAUDE(\.local)?\.md$|\.claude/|scripts/signing\.env$|.*\.p12$|.*\.mobileprovision$|.*\.env$)'
+FORBIDDEN='^(memory/|CLAUDE(\.local)?\.md$|\.claude/|scripts/signing\.env$|.*\.p12$|.*\.p8$|.*\.mobileprovision$|.*\.env$)'
 bad=$(echo "$FILES" | grep -E "$FORBIDDEN" || true)
 if [[ -n "$bad" ]]; then red "✗ private files would go public:"; echo "$bad" | sed 's/^/    /'; fail=1; fi
 
