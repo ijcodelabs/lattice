@@ -8,6 +8,10 @@ public enum Event: Hashable, Sendable {
     case windowFocused(WindowID)
     case windowFrameObserved(WindowID, Rect)
     case displaysChanged([Display])
+    /// `old` (a native tab that just went to the background) is replaced in its slot by `with` (the tab now shown).
+    case windowReplaced(WindowID, with: WindowSnapshot)
+    /// Time passing with nothing else to report (lets reserved tab slots expire).
+    case tick
     case settingsChanged(Settings)
     case command(Command)
     /// Start rebuilding a saved layout from the windows that are (or will be) present, until `until`.
@@ -66,6 +70,10 @@ public struct Engine: Sendable {
     /// set goes away. When the same set comes back (wake from sleep, monitor power-cycled, re-plugged), each
     /// display gets back what it showed — not just the first free workspace.
     private var arrangements: [String: DisplayArrangement] = [:]
+    /// Closed windows that had native tabs → when their slot is given up. The tab macOS shows next appears
+    /// as a new window a moment later and takes the slot instead of being added at the end.
+    public private(set) var closedTabs: [WindowID: Double] = [:]
+    public static let closedTabGrace = 2.0
     public static let switchEchoWindow = 0.4
 
     public init(settings: Settings, displays: [Display]) {
@@ -188,6 +196,11 @@ public struct Engine: Sendable {
         var intents: [Effect] = []
         for e in events { intents += apply(e, now: now) }
         if restoring != nil { intents += progressRestore(now: now) }
+        for (id, deadline) in closedTabs where now >= deadline {   // nobody took the slot: close it up
+            closedTabs[id] = nil
+            intents += remove(id)
+        }
+        forgetEmptyHidden()
         return layoutEffects() + intents
     }
 
@@ -195,8 +208,24 @@ public struct Engine: Sendable {
 
     mutating func apply(_ event: Event, now: Double) -> [Effect] {
         switch event {
-        case let .windowAdded(snap): return add(snap)
-        case let .windowRemoved(id): return remove(id)
+        case let .windowAdded(snap):
+            if windows[snap.id] == nil, let slot = closedTabSlot(for: snap, now: now) {
+                closedTabs[slot] = nil
+                return replace(slot, with: snap)
+            }
+            return add(snap)
+        case let .windowRemoved(id):
+            // The shown tab of a tab bar closed: macOS shows another tab next — keep the slot for it.
+            if closedTabs[id] != nil { return [] }   // reported again (reconcile): the deadline decides
+            if let w = windows[id], w.tabs.count >= 2, home[id] != nil {
+                closedTabs[id] = now + Self.closedTabGrace
+                return []
+            }
+            return remove(id)
+        case let .windowReplaced(old, with: snap):
+            closedTabs[old] = nil
+            return replace(old, with: snap)
+        case .tick: return []
         case let .windowFocused(id): return osFocused(id, now: now)
         case let .windowFrameObserved(id, r): observe(id, r); return []
         case let .displaysChanged(d):
@@ -250,6 +279,30 @@ public struct Engine: Sendable {
         let effects = detach(id)
         windows[id] = nil; home[id] = nil; sent[id] = nil; observed[id] = nil; parked[id] = nil
         return effects
+    }
+
+    /// A reserved slot of a just-closed tab that `snap` (a new window of the same app) should take: it is one
+    /// of the closed window's tabs (by title) or sits where that tab group was.
+    func closedTabSlot(for snap: WindowSnapshot, now: Double) -> WindowID? {
+        closedTabs.filter { $0.value > now }.keys.sorted().compactMap { id -> (WindowID, Bool)? in
+            guard let w = windows[id], w.pid == snap.pid else { return nil }
+            let r = sent[id] ?? w.frame
+            let sameFrame = abs(r.minX - snap.frame.minX) < 8 && abs(r.minY - snap.frame.minY) < 8
+                && abs(r.width - snap.frame.width) < 8 && abs(r.height - snap.frame.height) < 8
+            return w.tabs.contains(snap.title) || sameFrame ? (id, sameFrame) : nil
+        }.sorted { $0.1 && !$1.1 }.first?.0
+    }
+
+    /// A native tab switch: `snap` takes `old`'s place (same tile, group membership, floating frame, focus);
+    /// `old` is forgotten. Falls back to a normal add when `old` is unknown.
+    mutating func replace(_ old: WindowID, with snap: WindowSnapshot) -> [Effect] {
+        guard let wsName = home[old], windows[snap.id] == nil else { return add(snap) }
+        update(wsName) { $0.rename([old: snap.id]) }
+        windows[old] = nil; home[old] = nil; observed[old] = nil; parked[old] = nil
+        sent[old] = nil   // the new tab gets its frame sent (it should already be there; cheap to be sure)
+        windows[snap.id] = snap
+        home[snap.id] = wsName
+        return wsName == active && workspaces[wsName]?.focused == snap.id ? [.focus(snap.id)] : []
     }
 
     /// Take a window out of its workspace (picking the next focus there) but keep tracking it.
@@ -483,16 +536,26 @@ public struct Engine: Sendable {
     mutating func switchTo(_ name: String, now: Double) -> [Effect] {
         guard name != active else { return [] }
         ensureWorkspace(name)
+        // An empty, unpinned workspace belongs to no display (i3/sway): it opens where you are, even if it
+        // sits empty on another display — that display then shows another free workspace.
+        let here = focusedDisplay.id
+        let free = isFree(name)
+        var stolen = false
+        if free, let elsewhere = visible.first(where: { $0.value == name && $0.key != here })?.key {
+            visible[elsewhere] = nil
+            stolen = true
+        }
         if !isVisible(name) {
             let target = pinnedDisplay(name)?.id
-                ?? assigned[name].flatMap { id in displays.contains { $0.id == id } ? id : nil }
-                ?? focusedDisplay.id
+                ?? (free ? nil : assigned[name].flatMap { id in displays.contains { $0.id == id } ? id : nil })
+                ?? here
             visible[target] = name
             assigned[name] = target
             lastSwitch = now
         }
         previous = active
         active = name
+        if stolen { syncDisplays() }
         let ws = activeWorkspace
         guard let target = ws.focused ?? ws.windows.first else { return [.log("workspace \(name) (empty)")] }
         update(name) { $0.setFocused(target) }
@@ -942,6 +1005,25 @@ public struct Engine: Sendable {
     }
 
     // MARK: - Displays
+
+    /// Empty (no tiled, grouped or floating windows) and not pinned to a display.
+    func isFree(_ name: String) -> Bool {
+        (workspaces[name]?.windows.isEmpty ?? true) && pinnedDisplay(name) == nil
+    }
+
+    /// A workspace you left empty is deleted (i3/sway): its display, layout and tree are forgotten, so it
+    /// opens fresh, on whichever display you're on, next time. Configured names stay listed (empty).
+    mutating func forgetEmptyHidden() {
+        for name in Array(workspaces.keys) where !isVisible(name) && isFree(name) {
+            assigned[name] = nil
+            if settings.workspaces.contains(name) {
+                let fresh = Workspace(name: name, layout: settings.defaultLayout, ratio: settings.ratio)
+                if workspaces[name] != fresh { workspaces[name] = fresh }
+            } else {
+                workspaces[name] = nil
+            }
+        }
+    }
 
     func pinnedDisplay(_ name: String) -> Display? { settings.workspaceDisplays[name]?.resolve(in: displays) }
 

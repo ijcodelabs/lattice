@@ -14,9 +14,23 @@ public struct WindowSnapshot: Hashable, Codable, Sendable {
     public var bundleID: String?
     public var title: String
     public var frame: Rect
+    /// Titles of the macOS native tabs in this window's tab bar (this one included); empty without a tab bar.
+    /// Only the selected tab is listed as a window — the others are hidden windows (see NativeTabs).
+    public var tabs: [String]
 
-    public init(id: WindowID, pid: Int32, app: String, bundleID: String?, title: String, frame: Rect) {
+    public init(id: WindowID, pid: Int32, app: String, bundleID: String?, title: String, frame: Rect, tabs: [String] = []) {
         self.id = id; self.pid = pid; self.app = app; self.bundleID = bundleID; self.title = title; self.frame = frame
+        self.tabs = tabs
+    }
+
+    enum CodingKeys: String, CodingKey { case id, pid, app, bundleID, title, frame, tabs }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(id: try c.decode(WindowID.self, forKey: .id), pid: try c.decode(Int32.self, forKey: .pid),
+                  app: try c.decode(String.self, forKey: .app), bundleID: try c.decodeIfPresent(String.self, forKey: .bundleID),
+                  title: try c.decode(String.self, forKey: .title), frame: try c.decode(Rect.self, forKey: .frame),
+                  tabs: try c.decodeIfPresent([String].self, forKey: .tabs) ?? [])
     }
 }
 

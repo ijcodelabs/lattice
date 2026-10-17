@@ -37,7 +37,10 @@ final class AppMode: NSObject, NSApplicationDelegate {
         freopen(logURL.path, "a", stdout)
         freopen(logURL.path, "a", stderr)
         setvbuf(stdout, nil, _IOLBF, 0)
-        print("──── Lattice.app started \(Date().formatted(date: .numeric, time: .standard)) ────")
+        let info = Bundle.main.infoDictionary
+        let version = "\(info?["CFBundleShortVersionString"] as? String ?? "?") (\(info?["CFBundleVersion"] as? String ?? "?"))"
+        // Version + path: with several copies around (build/, ~/Applications, Homebrew) the log says which one ran.
+        print("──── Lattice.app \(version) started \(Date().formatted(date: .numeric, time: .standard)) — \(Bundle.main.bundlePath) ────")
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {

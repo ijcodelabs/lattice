@@ -37,6 +37,14 @@ public struct AXElement: @unchecked Sendable, Hashable {
     public var isMinimized: Bool { attribute(kAXMinimizedAttribute) ?? false }
     public var isFullscreen: Bool { attribute("AXFullScreen") ?? false }
 
+    /// Titles of the tabs in this window's native tab bar (an `AXTabGroup` child); empty without one.
+    public var tabTitles: [String] {
+        let kids: [AXUIElement] = attribute(kAXChildrenAttribute) ?? []
+        guard let bar = kids.map(AXElement.init).first(where: { $0.role == "AXTabGroup" }) else { return [] }
+        let tabs: [AXUIElement] = bar.attribute(kAXTabsAttribute) ?? bar.attribute(kAXChildrenAttribute) ?? []
+        return tabs.map { AXElement($0).title ?? "" }
+    }
+
     public var windows: [AXElement] {
         let list: [AXUIElement]? = attribute(kAXWindowsAttribute)
         return (list ?? []).map(AXElement.init)

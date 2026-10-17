@@ -60,11 +60,15 @@ func dual(_ s: Settings = Settings(gaps: noGaps)) -> Engine { Engine(settings: s
     @Test func workspaceSwitchUsesTheRightDisplay() {
         var e = dual()
         _ = e.handle(.windowAdded(snap(a)), now: 0)
-        // "2" is visible on the external display → just focus it, nothing is parked
+        _ = e.handle(.command(.focusDisplay(.next)), now: 0)
+        _ = e.handle(.windowAdded(snap(b)), now: 0)                       // b on "2" (external)
+        _ = e.handle(.command(.focusDisplay(.next)), now: 0)               // back on the laptop
+        // "2" (with a window) is visible on the external display → just focus it, nothing is parked
         _ = e.handle(.command(.workspace("2")), now: 1)
         #expect(e.visible == [1: "1", 2: "2"] && e.active == "2" && e.parked.isEmpty)
         // "3" (never shown) appears on the focused (external) display, replacing "2"
         _ = e.handle(.command(.workspace("3")), now: 2)
+        _ = e.handle(.windowAdded(snap(c)), now: 2)                       // c on "3"
         #expect(e.visible == [1: "1", 2: "3"])
         // "1" is visible on the laptop → focus moves there; "3" stays on the external
         _ = e.handle(.command(.workspace("1")), now: 3)

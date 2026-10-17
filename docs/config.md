@@ -162,6 +162,10 @@ Tab colours come from the theme: the active tab of the focused group uses `accen
 
 ---
 
+### macOS native tabs
+
+Apps with macOS's own tab bar (Ghostty, Terminal, Finder, TextEdit…) get **one tile per tab bar**, however many tabs it has: a new tab (`cmd+t`), switching tabs or closing one (`cmd+w`, when others remain) keeps the same slot instead of splitting the screen or moving the window. Lattice tiles the tab that's showing; to tile tabs side by side, move one to its own window (Window → *Move Tab to New Window*) or use Lattice's own groups.
+
 ## Hints: jump to any window by letter
 
 Press **`mod+u`** and a big letter appears on every visible window, on every display. Type it and that
@@ -219,7 +223,8 @@ Lattice doesn't start apps itself, and it can't reopen specific documents or tab
 
 Each display shows **one workspace at a time**, like i3 and sway. The workspace with the focused window is the *focused* one.
 
-- **`workspace N`:** if N is already showing on another display, focus just moves there. Otherwise N appears on its pinned display (see below), else on the display it was last shown on, else on the focused display, replacing what that display showed.
+- **`workspace N`:** if N has windows and is already showing on another display, focus just moves there. Otherwise N appears on its pinned display (see below), else — if it has windows — on the display it was last shown on, else on the focused display, replacing what that display showed.
+- **Empty workspaces belong to no display**, like i3 and sway: an empty N always opens where you are, even if it's sitting empty on another display (that display then shows another free workspace). A workspace you **leave empty is deleted** — its display, layout and splits are forgotten — so it starts fresh next time. Pinned workspaces keep their display.
 - **`focus` and `move` cross displays.** `focus right` from the rightmost window jumps to the display beyond the right edge, and `move right` carries the window over to it, even when that display's workspace is empty.
 - **Directions follow the real arrangement** (System Settings → Displays): a laptop placed *below* a monitor is reached with `down`, never with left/right. With no display that way, focus wraps around the workspace instead.
 - **Plugging in** a display shows the next free workspace on it. **Unplugging** one moves its workspaces to the main display; nothing is lost, and the hidden ones are parked there.
@@ -249,8 +254,16 @@ Default keys: **`mod+o`** focuses the next display, **`mod+shift+o`** moves the 
 bindings:
   mod+h: focus left
   mod+shift+2: move-to-workspace 2
-  cmd+ctrl+return: exec open -na Ghostty
+  cmd+ctrl+return: exec open -a Ghostty
 ```
+
+**A new terminal window per keypress:** `open -na App` starts a whole new *instance* each time (one more Dock icon per press). For Ghostty, ask the running instance for a window instead:
+
+```yaml
+  mod+return: exec osascript -e 'if application "Ghostty" is running then' -e 'tell application "Ghostty" to new window' -e 'end if' -e 'tell application "Ghostty" to activate'
+```
+
+macOS asks once whether Lattice may control Ghostty.
 
 **Chords** are modifiers plus one key, joined with `+`:
 
@@ -274,7 +287,7 @@ bindings:
 | `toggle-floating` | Float or re-tile the focused window. |
 | `resize grow\|shrink [width\|height] [amount]` | Change the focused window's share (`amount` 0–1, default 0.05). |
 | `balance` | Reset all splits and the ratio. |
-| `exec SHELL COMMAND` | Run a shell command, e.g. `exec open -na Ghostty`. |
+| `exec SHELL COMMAND` | Run a shell command (`/bin/sh -c`), e.g. `exec open -a Ghostty`. |
 | `focus-display left\|right\|up\|down\|next\|prev` | Focus the workspace shown on that display. |
 | `move-to-display …` (same targets) | Move the focused window onto that display's workspace, and follow it. |
 | `move-workspace-to-display …` | Move the whole focused workspace to that display. |

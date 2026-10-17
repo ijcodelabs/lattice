@@ -68,7 +68,7 @@ public final class AppHandle: @unchecked Sendable {
     public func managedSnapshot(_ w: AXElement) -> WindowSnapshot? {
         guard w.isManageableWindow, !w.isMinimized, !w.isFullscreen, let frame = w.frame else { return nil }
         return WindowSnapshot(id: WindowID(w.key(pid: pid)), pid: pid, app: name, bundleID: bundleID,
-                              title: w.title ?? "", frame: frame)
+                              title: w.title ?? "", frame: frame, tabs: w.tabTitles)
     }
 
     /// All managed windows of this app, read on the worker.

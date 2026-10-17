@@ -120,6 +120,7 @@ final class Controller {
         }
         modeTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
+                if let self, !self.engine.closedTabs.isEmpty { self.dispatch([.tick]) }   // let reserved tab slots expire
                 guard let self, self.router.expire(settings: self.engine.settings, now: self.now) else { return }
                 self.log("mode timed out")
                 self.ui.send(.hud(nil))
@@ -372,7 +373,15 @@ final class Controller {
             let event: Event?
             switch notification {
             case kAXWindowCreatedNotification, kAXWindowDeminiaturizedNotification:
-                event = handle.managedSnapshot(element).map(Event.windowAdded)
+                guard let snap = handle.managedSnapshot(element) else { return }
+                if snap.tabs.count >= 2 {   // a native tab: which windows does the app list now?
+                    let listed = Set(handle.element.windows.map { WindowID($0.key(pid: pid)) })
+                    DispatchQueue.main.async {
+                        MainActor.assumeIsolated { self?.tabWindowAppeared(snap, element: element, listed: listed) }
+                    }
+                    return
+                }
+                event = .windowAdded(snap)
             case kAXUIElementDestroyedNotification, kAXWindowMiniaturizedNotification:
                 event = .windowRemoved(id)
             case kAXFocusedWindowChangedNotification:
@@ -396,6 +405,33 @@ final class Controller {
         }
         for (_, el) in windows { elements[WindowID(el.key(pid: pid))] = el }
         return windows.map { .windowAdded($0.0) }
+    }
+
+    /// A window with a native tab bar: it may be a tab of a window we already tile (NativeTabs).
+    func tabWindowAppeared(_ snap: WindowSnapshot, element: AXElement, listed: Set<WindowID>) {
+        elements[snap.id] = element
+        dispatch(tabEvents(for: snap, listed: listed))
+    }
+
+    /// NativeTabs' events for one listed window, logged; forgets elements of dropped tabs.
+    func tabEvents(for snap: WindowSnapshot, listed: Set<WindowID>) -> [Event] {
+        let known = engine.windows.values.filter { $0.pid == snap.pid }
+        let events = NativeTabs.events(for: snap, isKnown: engine.windows[snap.id] != nil, known: Array(known),
+                                       listed: listed, frames: engine.sent)
+        for e in events {
+            switch e {
+            case let .windowReplaced(old, with: new):
+                log("⇄ \(new.app) tab “\(new.title.prefix(40))” takes the slot of “\(engine.windows[old]?.title.prefix(40) ?? "?")”")
+                elements[old] = nil
+            case let .windowRemoved(id):
+                log("− \(engine.windows[id]?.app ?? "?") background tab “\(engine.windows[id]?.title.prefix(40) ?? "?")”")
+                elements[id] = nil
+            case let .windowAdded(s):
+                log("+ \(s.app) “\(s.title.prefix(40))”")
+            default: break
+            }
+        }
+        return events
     }
 
     func axEvent(_ event: Event, element: AXElement, notification: String) {
@@ -439,7 +475,16 @@ final class Controller {
         let known = Set(engine.windows.values.filter { $0.pid == pid }.map(\.id))
         let seen = Set(found.map(\.0.id))
         var events: [Event] = []
-        for (snap, el) in found where !known.contains(snap.id) {
+        // Native tab bars first: a new tab takes its hidden sibling's slot; hidden siblings are dropped.
+        var tabHandled: Set<WindowID> = []
+        for (snap, el) in found where snap.tabs.count >= 2 {
+            let tabEvents = tabEvents(for: snap, listed: seen)
+            guard tabEvents != [.windowAdded(snap)], !tabEvents.isEmpty else { continue }
+            elements[snap.id] = el
+            tabHandled.insert(snap.id)
+            dispatch(tabEvents)
+        }
+        for (snap, el) in found where !known.contains(snap.id) && !tabHandled.contains(snap.id) {
             elements[snap.id] = el
             events.append(.windowAdded(snap))
             log("+ \(snap.app) “\(snap.title.prefix(40))” (reconcile)")
