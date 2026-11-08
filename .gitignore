@@ -6,3 +6,8 @@ DerivedData/
 .DS_Store
 build/
 *.p8
+
+# Claude Code per-user settings (saved approvals can contain typed secrets) and notes
+.claude/settings.local.json
+.claude/
+CLAUDE.local.md
